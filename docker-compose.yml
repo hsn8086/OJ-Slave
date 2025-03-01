@@ -1,6 +1,13 @@
 services:
   oj-slave:
-    image: hsn8086/oj-slave
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - CPY_VER=3.13.2
+        - PYPY_VER=3.11-v7.3.19
+
+    # image: hsn8086/oj-slave
     #    volumes:
     #      - ./debug_config.toml:/app/config.toml
     network_mode: host

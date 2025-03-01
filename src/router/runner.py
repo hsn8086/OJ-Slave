@@ -55,6 +55,14 @@ async def py_runner(code: Code, version: str = "3") -> str:
 
     return task_id
 
+@router.post("/pypy")
+async def pypy_runner(code: Code, version: str = "3") -> str:
+    task_id = f"pypy{version}_runner-{hashlib.sha256(code.code.encode()).hexdigest()}"
+    tm = TaskManager()
+    task = Task(task_id, runners.pypy, code.code, code.input, version=version)
+    tm.add(task)
+    return task_id
+
 
 @router.post("/gcc")
 def gcc_runner(code: Code) -> runners.Result:
