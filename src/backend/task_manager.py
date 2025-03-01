@@ -23,6 +23,7 @@
 
 @Date       : 2024/11/12 下午12:10
 """
+
 import asyncio
 from collections import deque
 from typing import Callable
@@ -51,7 +52,6 @@ class TaskManager(metaclass=SingletonMeta):
         self.task_set = set()
 
     def update(self):
-
         # remove finished tasks
         pop_tasks = []
         for task in self.running:
@@ -78,8 +78,9 @@ class TaskManager(metaclass=SingletonMeta):
     async def async_get_result(self, task_id: str):
         if task_id not in self.task_set:
             raise ValueError(f"Task {task_id} not found")
+        self.update()
         while task_id not in self.results:
             self.update()
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.1)
 
         return self.results[task_id]
