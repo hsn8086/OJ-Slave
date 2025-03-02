@@ -37,6 +37,9 @@ services:
       - redis-np
     networks:
       - oj-network
+    entrypoint: ["poetry","run","celery", "--app=src.celery_app","worker", "--loglevel=info","--concurrency=4"]
+    deploy:
+      replicas: 3
 
 networks:
   networks:
