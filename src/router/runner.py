@@ -24,6 +24,7 @@
 @Date       : 2024/11/1 下午5:02
 """
 
+import asyncio
 from celery.result import AsyncResult
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -42,15 +43,27 @@ class Code(BaseModel):
 
 
 @router.post("/get_result")
+@router.get("/get_result")
 async def get_result(task_id: str) -> runners.Result:
-    return AsyncResult(task_id).get()
+    async_task = AsyncResult(task_id)
+    while not async_task.successful():
+        await asyncio.sleep(0.1)
+    return async_task.get()
     # tm = TaskManager()
     # return await tm.async_get_result(task_id)
 
 
 @router.post("/py")
-async def py_runner(code: Code, version: str = "3") -> str:
-    return runners.py.delay(code.code, code.input, version=version).id
+async def py_runner(
+    code: Code, version: str = "3", memory_limit: int = 256, timeout: int = 1
+) -> str:
+    return runners.py.delay(
+        code.code,
+        code.input,
+        version=version,
+        memory_limit=memory_limit,
+        timeout=timeout,
+    ).id
     # task_id = f"py{version}_runner-{hashlib.sha256(code.code.encode()).hexdigest()}"
     # tm = TaskManager()
     # task = Task(task_id, runners.py, code.code, code.input, version=version)
@@ -60,8 +73,16 @@ async def py_runner(code: Code, version: str = "3") -> str:
 
 
 @router.post("/pypy")
-async def pypy_runner(code: Code, version: str = "3") -> str:
-    return runners.pypy.delay(code.code, code.input, version=version).id
+async def pypy_runner(
+    code: Code, version: str = "3", memory_limit: int = 256, timeout: int = 1
+) -> str:
+    return runners.pypy.delay(
+        code.code,
+        code.input,
+        version=version,
+        memory_limit=memory_limit,
+        timeout=timeout,
+    ).id
     # task_id = f"pypy{version}_runner-{hashlib.sha256(code.code.encode()).hexdigest()}"
     # tm = TaskManager()
     # task = Task(task_id, runners.pypy, code.code, code.input, version=version)
@@ -70,8 +91,13 @@ async def pypy_runner(code: Code, version: str = "3") -> str:
 
 
 @router.post("/gcc")
-def gcc_runner(code: Code) -> str:
-    return runners.gcc.delay(code.code, code.input).id
+def gcc_runner(code: Code, memory_limit: int = 256, timeout: int = 1) -> str:
+    return runners.gcc.delay(
+        code.code,
+        code.input,
+        memory_limit=memory_limit,
+        timeout=timeout,
+    ).id
     # task_id = f"gcc_runner-{hashlib.sha256(code.code.encode()).hexdigest()}"
     # tm = TaskManager()
     # task = Task(task_id, runners.gcc, code.code, code.input)
@@ -83,8 +109,13 @@ def gcc_runner(code: Code) -> str:
 
 
 @router.post("/gpp")
-def gpp_runner(code: Code) -> str:
-    return runners.gpp.delay(code.code, code.input).id
+def gpp_runner(code: Code, memory_limit: int = 256, timeout: int = 1) -> str:
+    return runners.gpp.delay(
+        code.code,
+        code.input,
+        memory_limit=memory_limit,
+        timeout=timeout,
+    ).id
     # task_id = f"gpp_runner-{hashlib.sha256(code.code.encode()).hexdigest()}"
     # tm = TaskManager()
     # task = Task(task_id, runners.gpp, code.code, code.input)

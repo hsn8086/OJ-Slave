@@ -34,6 +34,7 @@ from subprocess import Popen
 from typing import Callable
 from ..celery_app import app
 
+
 class Result(BaseModel):
     output: str
     type: Literal[
@@ -120,11 +121,11 @@ def run(
             except Exception as e:
                 return Result(output=str(e), type="compile_error", time=0, memory=0)
         try:
-            
             rst = run_p(
                 cmd.format(file_name=file_name).split(),
                 inp=inp,
-                timeout=1,
+                timeout=timeout,
+                memory_limit=memory_limit,
             )
             stdout = rst.stdout
             stderr = rst.stderr
@@ -144,13 +145,41 @@ def run(
             return Result(output=stderr, type="runtime_error", time=time, memory=memory)
         return Result(output=stdout, type="success", time=time, memory=memory)
 
-@app.task
-def py(code: str, inp: str, *, version: str = "3") -> Result:
-    return run(code=code, inp=inp, cmd=f"python{version} {{file_name}}")
 
 @app.task
-def pypy(code: str, inp: str, *, version: str = "3") -> Result:
-    return run(code=code, inp=inp, cmd=f"pypy{version} {{file_name}}")
+def py(
+    code: str,
+    inp: str,
+    *,
+    memory_limit: int = 256,
+    timeout: int = 1,
+    version: str = "3",
+) -> Result:
+    return run(
+        code=code,
+        inp=inp,
+        cmd=f"python{version} {{file_name}}",
+        memory_limit=memory_limit,
+        timeout=timeout,
+    )
+
+
+@app.task
+def pypy(
+    code: str,
+    inp: str,
+    *,
+    memory_limit: int = 256,
+    timeout: int = 1,
+    version: str = "3",
+) -> Result:
+    return run(
+        code=code,
+        inp=inp,
+        cmd=f"pypy{version} {{file_name}}",
+        memory_limit=memory_limit,
+        timeout=timeout,
+    )
 
 
 def gcc_compile(code_type: Literal["gcc", "gpp"]) -> str:
@@ -168,14 +197,26 @@ def gcc_compile(code_type: Literal["gcc", "gpp"]) -> str:
 
     return warp
 
-@app.task
-def gcc(code: str, inp: str) -> Result:
-    return run(
-        code=code, inp=inp, cmd="{file_name}", compile_func=gcc_compile(code_type="gcc")
-    )
 
 @app.task
-def gpp(code: str, inp: str) -> Result:
+def gcc(code: str, inp: str, *, memory_limit: int = 256, timeout: int = 1) -> Result:
     return run(
-        code=code, inp=inp, cmd="{file_name}", compile_func=gcc_compile(code_type="gpp")
+        code=code,
+        inp=inp,
+        cmd="{file_name}",
+        compile_func=gcc_compile(code_type="gcc"),
+        memory_limit=memory_limit,
+        timeout=timeout,
+    )
+
+
+@app.task
+def gpp(code: str, inp: str, *, memory_limit: int = 256, timeout: int = 1) -> Result:
+    return run(
+        code=code,
+        inp=inp,
+        cmd="{file_name}",
+        compile_func=gcc_compile(code_type="gpp"),
+        memory_limit=memory_limit,
+        timeout=timeout,
     )
