@@ -1,0 +1,153 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oj-slave-config
+data:
+  celery_broker_url: redis://redis-np:6379/0
+  celery_result_backend: redis://redis-np:6379/0
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oj-slave
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: oj-slave
+  template:
+    metadata:
+      labels:
+        app: oj-slave
+    spec:
+      containers:
+        - name: oj-slave
+          image: hsn8086/oj-slave
+          imagePullPolicy: IfNotPresent
+          command:
+            [
+              "poetry",
+              "run",
+              "uvicorn",
+              "src.main:app",
+              "--host",
+              "0.0.0.0",
+              "--port",
+              "8000",
+            ]
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: oj-slave-config
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+            requests:
+              cpu: "0.5"
+              memory: "512Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oj-slave-celery
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: oj-slave-celery
+  template:
+    metadata:
+      labels:
+        app: oj-slave-celery
+    spec:
+      restartPolicy: Always
+      containers:
+        - name: oj-slave-celery
+          image: hsn8086/oj-slave
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: oj-slave-config
+          command:
+            [
+              "poetry",
+              "run",
+              "celery",
+              "--app=src.celery_app",
+              "worker",
+              "--loglevel=info",
+              "-c",
+              "1",
+            ]
+          resources:
+            limits:
+              cpu: "2"
+              memory: "1Gi"
+            requests:
+              cpu: "1"
+              memory: "512Mi"
+          livenessProbe:
+            exec:
+              command:
+                - poetry
+                - run
+                - python3
+                - --version
+            initialDelaySeconds: 10 # wait 10 second to do the first probe.
+            periodSeconds: 2 # do probe every 2 second
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oj-slave-service
+spec:
+  selector:
+    app: oj-slave
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+      nodePort: 30000 # if your node has used 30000, you should change it.
+  type: NodePort # use NodePort instead of LoadBalancer
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-np
+spec:
+  selector:
+    matchLabels:
+      app: redis-np
+  serviceName: redis-np
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: redis-np
+    spec:
+      containers:
+        - name: redis-np
+          image: redis
+          ports:
+            - containerPort: 6379
+          resources:
+            limits:
+              cpu: "0.5"
+              memory: "512Mi"
+            requests:
+              cpu: "0.2"
+              memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-np
+spec:
+  selector:
+    app: redis-np
+  ports:
+    - port: 6379
+      targetPort: 6379
