@@ -29,9 +29,9 @@ import tempfile
 import psutil
 import time
 from typing import Literal
-
 from pydantic import BaseModel
 from subprocess import Popen
+from typing import Callable
 
 
 class Result(BaseModel):
@@ -44,6 +44,9 @@ class Result(BaseModel):
 
 
 class RunProcessResult(BaseModel):
+    status: Literal[
+        "success", "runtime_error", "compile_error", "timeout", "memory_limit_exceeded"
+    ] = "success"
     stdout: str
     stderr: str
     time: float
@@ -77,22 +80,48 @@ def run_p(cmd: list, inp: str = "", *, memory_limit: int = 256, timeout: int = 1
             if mem_use > memory_limit:  # check memory
                 child_process.kill()
                 child_process.terminate()
-                raise MemoryError()
+                return RunProcessResult(
+                    status="memory_limit_exceeded",
+                    stdout=p.stdout.read(),
+                    stderr=p.stderr.read(),
+                    time=time.time() - start,
+                    memory=max_memory,
+                )
 
-            if time.time() - start > timeout:  # check timeout
+            if time.time() - start >= timeout:  # check timeout
                 child_process.kill()
                 child_process.terminate()
-                raise TimeoutError()
+                return RunProcessResult(
+                    status="timeout",
+                    stdout=p.stdout.read(),
+                    stderr=p.stderr.read(),
+                    time=time.time() - start,
+                    memory=max_memory,
+                )
 
 
-def run(code: str, inp: str, cmd: str, *, memory_limit: int = 256, timeout: int = 1):
+def run(
+    code: str,
+    inp: str,
+    cmd: str,
+    *,
+    memory_limit: int = 256,
+    timeout: int = 1,
+    compile_func: Callable | None = None,
+):
     with tempfile.NamedTemporaryFile() as tmp:
         tmp.write(code.encode())
         tmp.seek(0)
         # print(f"python{version}", tmp.name)
+        file_name = tmp.name
+        if compile_func:
+            try:
+                file_name = compile_func(file_name)
+            except Exception as e:
+                return Result(output=str(e), type="compile_error", time=0, memory=0)
         try:
             rst = run_p(
-                cmd.format(file_name=tmp.name).split(),
+                cmd.format(file_name=file_name).split(),
                 inp=inp,
                 timeout=1,
             )
@@ -100,19 +129,16 @@ def run(code: str, inp: str, cmd: str, *, memory_limit: int = 256, timeout: int 
             stderr = rst.stderr
             time = rst.time
             memory = rst.memory
-        except TimeoutError:
-            return Result(
-                output="Time limit exceeded", type="timeout", time=time, memory=memory
-            )
-        except MemoryError:
-            return Result(
-                output="Memory limit exceeded",
-                type="memory_limit_exceeded",
-                time=time,
-                memory=memory,
-            )
+            status = rst.status
         except Exception as e:
-            return Result(output=str(e), type="runtime_error", time=time, memory=memory)
+            return Result(output=str(e), type="runtime_error", time=0, memory=0)
+        if status == "timeout":
+            return Result(output=stdout, type="timeout", time=time, memory=memory)
+        elif status == "memory_limit_exceeded":
+            return Result(
+                output=stdout, type="memory_limit_exceeded", time=time, memory=memory
+            )
+
         if stderr:
             return Result(output=stderr, type="runtime_error", time=time, memory=memory)
         return Result(output=stdout, type="success", time=time, memory=memory)
@@ -126,37 +152,29 @@ def pypy(code: str, inp: str, *, version: str = "3") -> Result:
     return run(code=code, inp=inp, cmd=f"pypy{version} {{file_name}}")
 
 
-def gcc(code: str, inp: str) -> Result:
-    with tempfile.NamedTemporaryFile() as tmp:
-        tmp.write(code.encode())
-        tmp.seek(0)
+def gcc_compile(code_type: Literal["gcc", "gpp"]) -> str:
+    def warp(file_name: str) -> str:
+        exe = "gcc" if code_type == "gcc" else "g++"
+        opition = "-xc" if code_type == "gcc" else "-xc++"
         res = subprocess.run(
-            ["gcc", tmp.name, "-o", tmp.name + ".out"], text=True, capture_output=True
+            [exe, opition, file_name, "-o", file_name + ".out"],
+            text=True,
+            capture_output=True,
         )
         if res.returncode != 0:
-            return Result(output=res.stderr, type="compile_error")
+            raise Exception(res.stderr)
+        return file_name + ".out"
 
-        res = subprocess.run(
-            [tmp.name + ".out"], input=inp, text=True, capture_output=True
-        )
-    if res.returncode != 0:
-        return Result(output=res.stderr, type="runtime_error")
-    return Result(output=res.stdout, type="success")
+    return warp
+
+
+def gcc(code: str, inp: str) -> Result:
+    return run(
+        code=code, inp=inp, cmd="{file_name}", compile_func=gcc_compile(code_type="gcc")
+    )
 
 
 def gpp(code: str, inp: str) -> Result:
-    with tempfile.NamedTemporaryFile(suffix=".cpp") as tmp:
-        tmp.write(code.encode())
-        tmp.seek(0)
-        res = subprocess.run(
-            ["g++", tmp.name, "-o", tmp.name + ".out"], text=True, capture_output=True
-        )
-        if res.returncode != 0:
-            return Result(output=res.stderr, type="compile_error")
-
-        res = subprocess.run(
-            [tmp.name + ".out"], input=inp, text=True, capture_output=True
-        )
-    if res.returncode != 0:
-        return Result(output=res.stderr, type="runtime_error")
-    return Result(output=res.stdout, type="success")
+    return run(
+        code=code, inp=inp, cmd="{file_name}", compile_func=gcc_compile(code_type="gpp")
+    )

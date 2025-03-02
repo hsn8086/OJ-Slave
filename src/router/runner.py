@@ -23,6 +23,7 @@
 
 @Date       : 2024/11/1 下午5:02
 """
+
 import hashlib
 
 from fastapi import APIRouter
@@ -31,9 +32,10 @@ from pydantic import BaseModel
 from ..backend import runners
 from ..backend.task_manager import Task, TaskManager
 
-block_router=APIRouter(prefix="/block")
-router =APIRouter(prefix="/runner")
+block_router = APIRouter(prefix="/block")
+router = APIRouter(prefix="/runner")
 router.include_router(block_router)
+
 
 class Code(BaseModel):
     code: str
@@ -55,6 +57,7 @@ async def py_runner(code: Code, version: str = "3") -> str:
 
     return task_id
 
+
 @router.post("/pypy")
 async def pypy_runner(code: Code, version: str = "3") -> str:
     task_id = f"pypy{version}_runner-{hashlib.sha256(code.code.encode()).hexdigest()}"
@@ -65,14 +68,24 @@ async def pypy_runner(code: Code, version: str = "3") -> str:
 
 
 @router.post("/gcc")
-def gcc_runner(code: Code) -> runners.Result:
-    res = runners.gcc(code.code, code.input)
+def gcc_runner(code: Code) -> str:
+    task_id = f"gcc_runner-{hashlib.sha256(code.code.encode()).hexdigest()}"
+    tm = TaskManager()
+    task = Task(task_id, runners.gcc, code.code, code.input)
+    tm.add(task)
+    return task_id
+    # res = runners.gcc(code.code, code.input)
 
-    return res
+    # return res
 
 
 @router.post("/gpp")
-def gpp_runner(code: Code) -> runners.Result:
-    res = runners.gpp(code.code, code.input)
+def gpp_runner(code: Code) -> str:
+    task_id = f"gpp_runner-{hashlib.sha256(code.code.encode()).hexdigest()}"
+    tm = TaskManager()
+    task = Task(task_id, runners.gpp, code.code, code.input)
+    tm.add(task)
+    return task_id
+    # res = runners.gpp(code.code, code.input)
 
-    return res
+    # return res
