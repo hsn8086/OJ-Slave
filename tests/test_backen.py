@@ -138,7 +138,7 @@ def req(code_type: Literal["py", "pypy"], code: str, inp: str):
 
 
 class Test:
-    def test_py(self):
+    def test_code(self):
         for name, group_d in codes.items():
             print(f'running group: "{name}".')
             for code_type in group_d["types"]:
@@ -154,3 +154,25 @@ class Test:
                         assert rst_d["output"] == d["result"]
                     if d["status"]:
                         assert rst_d["type"] == d["status"]
+
+    def test_press(self):
+        import httpx
+
+        ids = []
+        for name, group_d in codes.items():
+            print(f'running group: "{name}".')
+            for code_type in group_d["types"]:
+                print(f'- running type: "{code_type}".')
+                for d in group_d["codes"]:
+                    print(f'| - running code: "{d["name"]}"')
+                    resp = httpx.post(
+                        "http://127.0.0.1:8000/api/v1/runner/" + code_type,
+                        json=dict(code=d["code"], input=d["input"]),
+                    )
+                    ids.append(resp.json())
+        print("rst:")
+        for id_ in ids:
+            rst_resp = httpx.post(
+                f"http://127.0.0.1:8000/api/v1/runner/get_result?task_id={resp.json()}"
+            )
+            print("- ", rst_resp.json())
