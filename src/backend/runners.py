@@ -39,6 +39,15 @@ class Result(BaseModel):
     type: Literal[
         "success", "runtime_error", "compile_error", "timeout", "memory_limit_exceeded"
     ]
+    time: float = 0
+    memory: float = 0
+
+
+class RunProcessResult(BaseModel):
+    stdout: str
+    stderr: str
+    time: float
+    memory: float
 
 
 def run_p(cmd: list, inp: str = "", *, memory_limit: int = 256, timeout: int = 1):
@@ -48,16 +57,23 @@ def run_p(cmd: list, inp: str = "", *, memory_limit: int = 256, timeout: int = 1
         start = time.time()
         p.stdin.write(inp)
         p.stdin.flush()  # input and flush the buffer
+        max_memory = 0
         while True:
             state = p.poll()  # check process state
             if state is not None:
-                return p.stdout.read(), p.stderr.read()
+                return RunProcessResult(
+                    stdout=p.stdout.read(),
+                    stderr=p.stderr.read(),
+                    time=time.time() - start,
+                    memory=max_memory,
+                )
 
             child_process = psutil.Process(
                 p.pid
             )  # use psutil tu monitoring process status
 
             mem_use = child_process.memory_full_info().uss / (1024**2)
+            max_memory = max(max_memory, mem_use)
             if mem_use > memory_limit:  # check memory
                 child_process.kill()
                 child_process.terminate()
@@ -75,20 +91,31 @@ def run(code: str, inp: str, cmd: str, *, memory_limit: int = 256, timeout: int 
         tmp.seek(0)
         # print(f"python{version}", tmp.name)
         try:
-            stdout, stderr = run_p(
+            rst = run_p(
                 cmd.format(file_name=tmp.name).split(),
                 inp=inp,
                 timeout=1,
             )
+            stdout = rst.stdout
+            stderr = rst.stderr
+            time = rst.time
+            memory = rst.memory
         except TimeoutError:
-            return Result(output="Time limit exceeded", type="timeout")
+            return Result(
+                output="Time limit exceeded", type="timeout", time=time, memory=memory
+            )
         except MemoryError:
-            return Result(output="Memory limit exceeded", type="memory_limit_exceeded")
+            return Result(
+                output="Memory limit exceeded",
+                type="memory_limit_exceeded",
+                time=time,
+                memory=memory,
+            )
         except Exception as e:
-            return Result(output=str(e), type="runtime_error")
+            return Result(output=str(e), type="runtime_error", time=time, memory=memory)
         if stderr:
-            return Result(output=stderr, type="runtime_error")
-        return Result(output=stdout, type="success")
+            return Result(output=stderr, type="runtime_error", time=time, memory=memory)
+        return Result(output=stdout, type="success", time=time, memory=memory)
 
 
 def py(code: str, inp: str, *, version: str = "3") -> Result:
