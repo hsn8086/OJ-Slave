@@ -9,9 +9,17 @@ services:
     environment:
       - CELERY_BROKER_URL=redis://redis-np:6379/0
       - CELERY_RESULT_BACKEND=redis://redis-np:6379/0
-    # image: hsn8086/oj-slave
-    #    volumes:
-    #      - ./debug_config.toml:/app/config.toml
+    command:
+      [
+        "poetry",
+        "run",
+        "uvicorn",
+        "src.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+      ]
     ports:
       - 8000:8000
     networks:
@@ -20,16 +28,22 @@ services:
     image: redis:latest
     restart: always
     ports:
-      - '6379:6379'
+      - "6379:6379"
     networks:
       - oj-network
   celery_worker:
     build:
       context: .
-      dockerfile: Dockerfile.celery
+      dockerfile: Dockerfile
       args:
         - CPY_VER=3.13.2
         - PYPY_VER=3.11-v7.3.19
+    healthcheck:
+      test: ["CMD-SHELL", "python3 --version"]
+      interval: 1s
+      timeout: 1s
+      retries: 3
+    restart: always
     environment:
       - CELERY_BROKER_URL=redis://redis-np:6379/0
       - CELERY_RESULT_BACKEND=redis://redis-np:6379/0
@@ -37,10 +51,26 @@ services:
       - redis-np
     networks:
       - oj-network
-    entrypoint: ["poetry","run","celery", "--app=src.celery_app","worker", "--loglevel=info","--concurrency=4"]
+    entrypoint:
+      [
+        "poetry",
+        "run",
+        "celery",
+        "--app=src.celery_app",
+        "worker",
+        "--loglevel=info",
+        "--concurrency=2",
+      ]
     deploy:
-      replicas: 3
-
+      replicas: 2
+  # autoheal:
+  #   restart: always
+  #   image: willfarrell/autoheal
+  #   container_name: autoheal
+  #   environment:
+  #     - AUTOHEAL_CONTAINER_LABEL=all
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
 networks:
   networks:
   oj-network:
