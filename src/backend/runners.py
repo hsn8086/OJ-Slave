@@ -32,7 +32,7 @@ from typing import Literal
 from pydantic import BaseModel
 from subprocess import Popen
 from typing import Callable
-
+from ..celery_app import app
 
 class Result(BaseModel):
     output: str
@@ -120,6 +120,7 @@ def run(
             except Exception as e:
                 return Result(output=str(e), type="compile_error", time=0, memory=0)
         try:
+            
             rst = run_p(
                 cmd.format(file_name=file_name).split(),
                 inp=inp,
@@ -143,11 +144,11 @@ def run(
             return Result(output=stderr, type="runtime_error", time=time, memory=memory)
         return Result(output=stdout, type="success", time=time, memory=memory)
 
-
+@app.task
 def py(code: str, inp: str, *, version: str = "3") -> Result:
     return run(code=code, inp=inp, cmd=f"python{version} {{file_name}}")
 
-
+@app.task
 def pypy(code: str, inp: str, *, version: str = "3") -> Result:
     return run(code=code, inp=inp, cmd=f"pypy{version} {{file_name}}")
 
@@ -167,13 +168,13 @@ def gcc_compile(code_type: Literal["gcc", "gpp"]) -> str:
 
     return warp
 
-
+@app.task
 def gcc(code: str, inp: str) -> Result:
     return run(
         code=code, inp=inp, cmd="{file_name}", compile_func=gcc_compile(code_type="gcc")
     )
 
-
+@app.task
 def gpp(code: str, inp: str) -> Result:
     return run(
         code=code, inp=inp, cmd="{file_name}", compile_func=gcc_compile(code_type="gpp")

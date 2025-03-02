@@ -6,8 +6,39 @@ services:
       args:
         - CPY_VER=3.13.2
         - PYPY_VER=3.11-v7.3.19
-
+    environment:
+      - CELERY_BROKER_URL=redis://redis-np:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis-np:6379/0
     # image: hsn8086/oj-slave
     #    volumes:
     #      - ./debug_config.toml:/app/config.toml
-    network_mode: host
+    ports:
+      - 8000:8000
+    networks:
+      - oj-network
+  redis-np:
+    image: redis:latest
+    restart: always
+    ports:
+      - '6379:6379'
+    networks:
+      - oj-network
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.celery
+      args:
+        - CPY_VER=3.13.2
+        - PYPY_VER=3.11-v7.3.19
+    environment:
+      - CELERY_BROKER_URL=redis://redis-np:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis-np:6379/0
+    depends_on:
+      - redis-np
+    networks:
+      - oj-network
+
+networks:
+  networks:
+  oj-network:
+    driver: bridge

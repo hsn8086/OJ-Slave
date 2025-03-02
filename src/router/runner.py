@@ -24,13 +24,12 @@
 @Date       : 2024/11/1 下午5:02
 """
 
-import hashlib
-
+from celery.result import AsyncResult
 from fastapi import APIRouter
 from pydantic import BaseModel
 
 from ..backend import runners
-from ..backend.task_manager import Task, TaskManager
+
 
 block_router = APIRouter(prefix="/block")
 router = APIRouter(prefix="/runner")
@@ -44,36 +43,40 @@ class Code(BaseModel):
 
 @router.post("/get_result")
 async def get_result(task_id: str) -> runners.Result:
-    tm = TaskManager()
-    return await tm.async_get_result(task_id)
+    return AsyncResult(task_id).get()
+    # tm = TaskManager()
+    # return await tm.async_get_result(task_id)
 
 
 @router.post("/py")
 async def py_runner(code: Code, version: str = "3") -> str:
-    task_id = f"py{version}_runner-{hashlib.sha256(code.code.encode()).hexdigest()}"
-    tm = TaskManager()
-    task = Task(task_id, runners.py, code.code, code.input, version=version)
-    tm.add(task)
+    return runners.py.delay(code.code, code.input, version=version).id
+    # task_id = f"py{version}_runner-{hashlib.sha256(code.code.encode()).hexdigest()}"
+    # tm = TaskManager()
+    # task = Task(task_id, runners.py, code.code, code.input, version=version)
+    # tm.add(task)
 
-    return task_id
+    # return task_id
 
 
 @router.post("/pypy")
 async def pypy_runner(code: Code, version: str = "3") -> str:
-    task_id = f"pypy{version}_runner-{hashlib.sha256(code.code.encode()).hexdigest()}"
-    tm = TaskManager()
-    task = Task(task_id, runners.pypy, code.code, code.input, version=version)
-    tm.add(task)
-    return task_id
+    return runners.pypy.delay(code.code, code.input, version=version).id
+    # task_id = f"pypy{version}_runner-{hashlib.sha256(code.code.encode()).hexdigest()}"
+    # tm = TaskManager()
+    # task = Task(task_id, runners.pypy, code.code, code.input, version=version)
+    # tm.add(task)
+    # return task_id
 
 
 @router.post("/gcc")
 def gcc_runner(code: Code) -> str:
-    task_id = f"gcc_runner-{hashlib.sha256(code.code.encode()).hexdigest()}"
-    tm = TaskManager()
-    task = Task(task_id, runners.gcc, code.code, code.input)
-    tm.add(task)
-    return task_id
+    return runners.gcc.delay(code.code, code.input).id
+    # task_id = f"gcc_runner-{hashlib.sha256(code.code.encode()).hexdigest()}"
+    # tm = TaskManager()
+    # task = Task(task_id, runners.gcc, code.code, code.input)
+    # tm.add(task)
+    # return task_id
     # res = runners.gcc(code.code, code.input)
 
     # return res
@@ -81,11 +84,12 @@ def gcc_runner(code: Code) -> str:
 
 @router.post("/gpp")
 def gpp_runner(code: Code) -> str:
-    task_id = f"gpp_runner-{hashlib.sha256(code.code.encode()).hexdigest()}"
-    tm = TaskManager()
-    task = Task(task_id, runners.gpp, code.code, code.input)
-    tm.add(task)
-    return task_id
+    return runners.gpp.delay(code.code, code.input).id
+    # task_id = f"gpp_runner-{hashlib.sha256(code.code.encode()).hexdigest()}"
+    # tm = TaskManager()
+    # task = Task(task_id, runners.gpp, code.code, code.input)
+    # tm.add(task)
+    # return task_id
     # res = runners.gpp(code.code, code.input)
 
     # return res
