@@ -3,19 +3,16 @@ from typing import Literal
 
 codes = {
     "python": {
-        "types": ["py", "pypy"],
+        "types": ["py", "pypy","codon"],
         "codes": [
             {
                 "name": "fibo",
-                "input": "30\n",
-                "result": "832040\n",
+                "input": "35\n",
+                "result": "9227465\n",
                 "status": "success",
                 "code": dedent(
                     """
-                from sys import setrecursionlimit
-                setrecursionlimit(100000000)
-
-                def fi(n=1):
+                def fi(n: int = 1):
                     if n in [1,2]:
                         return 1
                     else:
@@ -31,8 +28,10 @@ codes = {
                 "status": "timeout",
                 "code": dedent(
                     """
+                    a=0
                     while True:
-                        pass
+                        a+=1
+                    print(a)
                     """
                 ),
             },
@@ -52,10 +51,11 @@ codes = {
         "codes": [
             {
                 "name": "fibo",
-                "input": "30\n",
-                "result": "832040",
+                "input": "35\n",
+                "result": "9227465",
                 "status": "success",
                 "code": dedent("""
+                    #pragma GCC optimize(2)
                     #include <stdio.h>
                     int fibonacci(int n) {
                         if(n == 1 || n == 2) {
@@ -122,14 +122,15 @@ codes = {
 def req(code_type: Literal["py", "pypy"], code: str, inp: str):
     import httpx
     import json
-
+    # url="192.168.49.2:30000"
+    url="127.0.0.1:8000"
     resp = httpx.post(
-        "http://127.0.0.1:8000/api/v1/runner/" + code_type,
+        f"http://{url}/api/v1/runner/" + code_type,
         json=dict(code=code, input=inp),
     )
     # print(resp.text)
-    rst_resp = httpx.post(
-        f"http://127.0.0.1:8000/api/v1/runner/get_result?task_id={resp.json()}"
+    rst_resp = httpx.get(
+        f"http://{url}/api/v1/runner/get_result?task_id={resp.json()}",timeout=10
     )
     try:
         return rst_resp.json()
@@ -155,24 +156,25 @@ class Test:
                     if d["status"]:
                         assert rst_d["type"] == d["status"]
 
-    def test_press(self):
-        import httpx
-
-        ids = []
-        for name, group_d in codes.items():
-            print(f'running group: "{name}".')
-            for code_type in group_d["types"]:
-                print(f'- running type: "{code_type}".')
-                for d in group_d["codes"]:
-                    print(f'| - running code: "{d["name"]}"')
-                    resp = httpx.post(
-                        "http://127.0.0.1:8000/api/v1/runner/" + code_type,
-                        json=dict(code=d["code"], input=d["input"]),
-                    )
-                    ids.append(resp.json())
-        print("rst:")
-        for id_ in ids:
-            rst_resp = httpx.post(
-                f"http://127.0.0.1:8000/api/v1/runner/get_result?task_id={resp.json()}"
-            )
-            print("- ", rst_resp.json())
+    # def test_press(self):
+    #     import httpx
+        
+    #     ids = []
+    #     for _ in range(100):
+    #         for name, group_d in codes.items():
+    #             print(f'running group: "{name}".')
+    #             for code_type in group_d["types"]:
+    #                 print(f'- running type: "{code_type}".')
+    #                 for d in group_d["codes"]:
+    #                     print(f'| - running code: "{d["name"]}"')
+    #                     resp = httpx.post(
+    #                         "http://127.0.0.1:8000/api/v1/runner/" + code_type,
+    #                         json=dict(code=d["code"], input=d["input"]),
+    #                     )
+    #                     ids.append(resp.json())
+    #         # print("rst:")
+    #         # for id_ in ids:
+    #         #     rst_resp = httpx.post(
+    #         #         f"http://127.0.0.1:8000/api/v1/runner/get_result?task_id={resp.json()}"
+    #         #     )
+    #         #     print("- ", rst_resp.json())

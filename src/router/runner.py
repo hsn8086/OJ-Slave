@@ -90,6 +90,16 @@ async def pypy_runner(
     # return task_id
 
 
+@router.post("/codon")
+async def codon_runner(code: Code, memory_limit: int = 256, timeout: int = 1) -> str:
+    return runners.codon.delay(
+        code.code,
+        code.input,
+        memory_limit=memory_limit,
+        timeout=timeout,
+    ).id
+
+
 @router.post("/gcc")
 def gcc_runner(code: Code, memory_limit: int = 256, timeout: int = 1) -> str:
     return runners.gcc.delay(

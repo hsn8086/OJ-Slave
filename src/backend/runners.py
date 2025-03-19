@@ -182,6 +182,35 @@ def pypy(
     )
 
 
+def codon_compile(file_name: str) -> str:
+    res = subprocess.run(
+        ["/root/.codon/bin/codon", "build", "-release", file_name, "-o", file_name + ".out"],
+        text=True,
+        capture_output=True,
+    )
+    if res.returncode != 0:
+        raise Exception(res.stderr)
+    return file_name + ".out"
+
+
+@app.task
+def codon(
+    code: str,
+    inp: str,
+    *,
+    memory_limit: int = 256,
+    timeout: int = 1,
+) -> Result:
+    return run(
+        code=code,
+        inp=inp,
+        cmd="{file_name}",
+        memory_limit=memory_limit,
+        timeout=timeout,
+        compile_func=codon_compile,
+    )
+
+
 def gcc_compile(code_type: Literal["gcc", "gpp"]) -> str:
     def warp(file_name: str) -> str:
         exe = "gcc" if code_type == "gcc" else "g++"
